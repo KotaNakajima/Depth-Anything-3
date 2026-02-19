@@ -315,6 +315,163 @@ A community-curated list of Depth Anything 3 integrations across 3D tools, creat
   </tr>
 </table>
 
+## 🌾 稲群落バッチ推論＆分離ツール（GUI）
+
+Depth-Anything-3 を用いて、鉛直真上から撮影した水稲画像フォルダに対し、一括で
+- 深度推定（可視化PNG保存）
+- 深度に基づくイネ/地面分離（2値マスクPNG保存）
+- オーバーレイ可視化PNG保存
+- 植被率（各画像・全体）のCSV保存
+
+を行う Gradio ベースのGUIツールを追加しました。
+
+- 起動モジュール: `depth_anything_3.app.rice_canopy_app`
+- 入出力の保存規約:
+  - 入力例: `base_dir/images/shooting_date`
+  - 出力:
+    - 深度可視化: `base_dir/depth_images/shooting_date`
+    - 2値マスク: `base_dir/seg_images/shooting_date`
+    - オーバーレイ: `base_dir/overlay_images/shooting_date`
+    - CSV: `base_dir/reports/shooting_date/coverage.csv`
+  - 入力が上記規約でなくても、入力フォルダの親配下に兄弟ディレクトリとして同様の構造を作成します
+
+### インストール（WSL/仮想環境推奨）
+
+1) 仮想環境
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+```
+
+2) 依存関係（torch系を除く）
+```bash
+pip install -r requirements.txt
+```
+- 本リポジトリの `requirements.txt` では、WSL/環境差に対応するため `torch/torchvision` をコメントアウトしています
+
+3) PyTorch の手動インストール（環境に合わせて選択）
+- CUDA 12.1:
+```bash
+pip install --index-url https://download.pytorch.org/whl/cu121 torch torchvision torchaudio
+```
+- CUDA 12.4:
+```bash
+pip install --index-url https://download.pytorch.org/whl/cu124 torch torchvision torchaudio
+```
+- CPU のみ:
+```bash
+pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision torchaudio
+```
+- 公式案内: https://pytorch.org/get-started/locally/
+
+補足:
+- `xformers` はCUDAバージョン整合が必要です。ビルドに失敗する場合は一旦 `requirements.txt` から外す/アンインストールしても推論は多くのケースで動作します
+- `pip install -e .` を使う場合は `pyproject.toml` に `torch` 依存があるため `--no-deps` の利用を推奨します:
+```bash
+pip install -e . --no-deps
+```
+
+### 実行
+
+```bash
+python -m depth_anything_3.app.rice_canopy_app
+```
+
+- ブラウザで起動（デフォルト: http://127.0.0.1:7861）
+- 画像フォルダパス（jpg/pngのみ）を入力
+- モデル: `da3-large`（相対深度; 既定）
+  - 将来拡張として `da3metric-large` を選択肢に用意（UIから選択可能）
+- 分離: 既定は Otsu（浅い=イネ）。必要なら「反転（深い=イネ）」をON
+- 保存物:
+  - 深度可視化PNG（8bit, viridis/turbo）
+  - 2値マスクPNG（0/255）
+  - オーバーレイPNG（緑で半透明合成）
+  - CSV（各画像の植被率と overall）
+
+### オプション
+
+- `process_res` / `process_res_method`: 推論解像度・方法
+- `batch_size`: VRAMに応じて調整
+- `min_area` / `close_kernel`: 小領域除去/クロージング
+- `alpha_overlay`: オーバーレイ透過率
+
+### パラメータ解説（推奨値）
+- 画像フォルダパス
+  - Windowsのパスでも可（例: C:\path\to\dir や 画像ファイルのフルパス）。WSLでは自動的に /mnt/... へ正規化。ファイルを指定した場合は親フォルダを処理対象に切替。
+- モデル（da3-large 推奨）
+  - 相対深度モデル。将来 da3metric-large（実スケール）にも対応可能なフック実装済み。
+- Model Repo 上書き
+  - 既定: depth-anything/DA3-LARGE。ネットワーク事情に応じてミラーやローカルパスに変更可。
+- デバイス
+  - auto（既定）/cuda/cpu。autoはCUDA可用時はGPUを選択。
+- process_res / process_res_method
+  - 推論解像度とリサイズ方法。既定: 504 / upper_bound_resize。高精細を優先する場合は 720〜1024 や high_res を検討。VRAMに応じて調整。
+- バッチサイズ
+  - 既定: 8。GPUでは2〜8程度、CPUでは1〜2程度が目安。OOMや速度に応じて調整。
+- 分離手法（otsu/manual）
+  - 既定: otsu（大域しきい、自動）。結果が少なすぎ/多すぎる場合は「反転」を切替、または manual でスライダー（0..1）を0.3/0.5/0.7など試行。
+- 反転（深い=イネ）
+  - 既定: OFF（浅い=イネ）。撮影条件で逆になる場合はON。
+- 最小領域ピクセル（min_area）
+  - 既定: 200。小さいノイズ領域を削除。ノイズが多ければ上げる（例: 500〜2000）。
+- クロージングカーネル（close_kernel）
+  - 既定: 3。穴埋め・ギャップ閉じ。滑らかにしたければ5〜9も検討。0で無効。
+- 深度カラーマップ（cmap）
+  - 可視化のみ（viridis/turbo）。結果には影響なし。
+- オーバーレイ透過率（alpha_overlay）
+  - 既定: 0.5。重ね表示の見やすさ調整。
+- overall行付きCSVも保存する
+  - ON時、per-imageに加えてOVERALL行付きのcoverage.csvも保存。
+- デバッグログ（例外詳細）
+  - ON時、例外のトレースバックをログに追記。レポートフォルダにlog.txtとしても保存。
+
+### 出力ファイルの場所
+- 深度可視化PNG: base_dir/depth_images/shooting_date/xxx_depth.png
+- 2値マスクPNG: base_dir/seg_images/shooting_date/xxx_plant.png
+- オーバーレイPNG: base_dir/overlay_images/shooting_date/xxx_overlay.png
+- CSV（画像ごとの植被率）: base_dir/reports/shooting_date/coverage_per_image.csv
+  - 列: filename,width,height,plant_px,valid_px,coverage_percent
+- CSV（OVERALL行付き、任意）: base_dir/reports/shooting_date/coverage.csv
+- デバッグ/処理ログ: base_dir/reports/shooting_date/log.txt
+
+### 注意点
+
+- Hugging Face からモデルをダウンロードします。ネットワーク制約がある場合はミラー（`HF_ENDPOINT`）の利用をご検討ください
+- 既定のモデルレポ: `depth-anything/DA3-LARGE`（UIで上書き可）
+- 画像は `.jpg/.jpeg/.png` のみ処理します
+
+---
+
+### 🔧 トラブルシュート
+
+- エラー: `ModuleNotFoundError: No module named 'depth_anything_3'`
+  - 原因: 本リポジトリは「srcレイアウト」です。`python -m depth_anything_3....` を使う場合、`src` をPythonのモジュール探索経路に載せるか、パッケージをインストールする必要があります。
+  - 対処1（推奨, 依存解決は手動のため --no-deps）:
+    ```bash
+    # プロジェクトルートで
+    pip install -e . --no-deps
+    # その後
+    python -m depth_anything_3.app.rice_canopy_app
+    ```
+    - WSL/仮想環境でtorchは手動導入方針のため、`--no-deps` を付けてください（torch/torchvisionが自動で入らないように）。
+  - 対処2（環境変数でPYTHONPATHを一時追加）:
+    ```bash
+    # プロジェクトルートで
+    export PYTHONPATH="$PWD/src:$PYTHONPATH"
+    python -m depth_anything_3.app.rice_canopy_app
+    ```
+  - 対処3（モジュールではなくスクリプトを直接実行）:
+    ```bash
+    # プロジェクトルートで
+    python src/depth_anything_3/app/rice_canopy_app.py
+    ```
+
+- なお、WSL上で仮想環境を有効化してから実行してください:
+  ```bash
+  source .venv/bin/activate
+  ```
+
 ## 📝 Citations
 If you find Depth Anything 3 useful in your research or projects, please cite our work:
 

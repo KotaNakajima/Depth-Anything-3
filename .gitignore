@@ -33,3 +33,11 @@ input_images*/
 src/debug_main.py
 temp*.png
 /outputs
+
+# Secrets
+.env
+.env.*
+*.key
+*.pem
+credentials.json
+service-account*.json

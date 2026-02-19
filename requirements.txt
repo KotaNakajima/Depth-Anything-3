@@ -1,7 +1,10 @@
+# NOTE: torch/torchvision/torchaudio はCUDA/CPU環境に合わせて手動インストールしてください
+# 参考: https://pytorch.org/get-started/locally/
+# このrequirements.txtではそれらをコメントアウトしています（WSL/仮想環境向け）
 pre-commit
 trimesh
-torch>=2
-torchvision
+#torch>=2
+#torchvision
 einops
 huggingface_hub
 imageio
@@ -22,3 +25,4 @@ plyfile
 pillow_heif
 safetensors
 pycolmap
+gradio
